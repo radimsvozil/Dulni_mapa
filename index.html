@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Světová mapa dolů</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#060d1a; font-family:sans-serif; color:#c8deff; height:100vh; overflow:hidden; }
+#globe-container { width:100vw; height:100vh; }
+
+.ui-btn {
+  position:absolute; width:42px; height:42px; border-radius:50%;
+  background:rgba(6,13,26,0.88); border:0.5px solid rgba(100,160,255,0.3);
+  color:#88bbff; font-size:18px; cursor:pointer; display:flex;
+  align-items:center; justify-content:center; transition:all 0.15s; z-index:100;
+}
+.ui-btn:hover { background:rgba(100,160,255,0.15); border-color:rgba(100,160,255,0.6); }
+#btn-db     { top:16px; right:16px; }
+#btn-legend { top:66px; right:16px; font-size:15px; }
+#btn-filter { top:116px; right:16px; font-size:15px; }
+
+h1 {
+  position:absolute; top:16px; left:16px;
+  font-size:17px; font-weight:400; color:rgba(136,187,255,0.85);
+  pointer-events:none; z-index:10;
+}
+#counter { position:absolute; top:42px; left:16px; font-size:12px; color:rgba(200,220,255,0.5); z-index:10; }
+
+#search-wrap {
+  position:absolute; top:16px; right:80px;
+  z-index:100; width:220px;
+}
+#search-input {
+  padding:8px 14px; border-radius:20px; border:0.5px solid rgba(100,160,255,0.3);
+  background:rgba(6,13,26,0.88); color:#c8deff; font-size:13px; width:100%; outline:none;
+}
+#search-input:focus { border-color:rgba(100,160,255,0.7); }
+#search-results {
+  position:absolute; top:38px; left:0; width:100%;
+  background:rgba(6,13,26,0.97); border:0.5px solid rgba(100,160,255,0.25);
+  border-radius:10px; overflow:hidden; display:none; z-index:200;
+}
+.search-item { padding:8px 14px; cursor:pointer; font-size:13px; border-bottom:0.5px solid rgba(100,160,255,0.1); transition:background 0.1s; }
+.search-item:hover { background:rgba(100,160,255,0.12); }
+.search-item-name { color:#c8deff; }
+.search-item-sub  { color:rgba(200,220,255,0.45); font-size:11px; }
+
+#info-box {
+  position:absolute; bottom:24px; left:50%; transform:translateX(-50%);
+  background:rgba(6,13,26,0.92); border:0.5px solid rgba(100,160,255,0.35);
+  border-radius:12px; padding:14px 24px; font-size:14px; color:#c8deff;
+  min-width:320px; max-width:680px; text-align:center; pointer-events:none; z-index:10;
+}
+.info-grid { display:flex; gap:16px; justify-content:center; margin-top:8px; flex-wrap:wrap; }
+.info-cell { display:flex; flex-direction:column; align-items:center; gap:2px; }
+.info-label { color:rgba(200,220,255,0.45); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+.info-value { color:rgba(200,220,255,0.95); font-size:13px; }
+
+.panel {
+  position:absolute; top:0; right:0; height:100vh;
+  background:rgba(6,13,26,0.97); border-left:0.5px solid rgba(100,160,255,0.2);
+  z-index:200; display:none; flex-direction:column; overflow:hidden;
+}
+.panel.open { display:flex; }
+#panel-legend { width:220px; }
+#panel-filter { width:280px; }
+#panel-db     { width:min(98vw, 960px); }
+
+.panel-header {
+  padding:14px 16px; border-bottom:0.5px solid rgba(100,160,255,0.15);
+  display:flex; align-items:center; justify-content:space-between; flex-shrink:0;
+}
+.panel-header h2 { font-size:15px; font-weight:500; color:#88bbff; }
+.panel-close { background:none; border:none; color:rgba(200,220,255,0.5); font-size:20px; cursor:pointer; }
+.panel-close:hover { color:#c8deff; }
+.panel-body { flex:1; overflow-y:auto; padding:14px 16px; }
+
+.leg { display:flex; align-items:center; gap:8px; margin-bottom:8px; color:rgba(200,220,255,0.8); font-size:13px; }
+.leg-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; }
+.leg-sep { border:none; border-top:0.5px solid rgba(100,160,255,0.15); margin:10px 0; }
+.leg-title { font-size:11px; color:rgba(200,220,255,0.4); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; }
+
+.filter-btn {
+  display:block; width:100%; text-align:left; padding:8px 12px; margin-bottom:5px;
+  border-radius:8px; border:0.5px solid rgba(100,160,255,0.2);
+  background:rgba(255,255,255,0.04); color:rgba(200,220,255,0.75);
+  cursor:pointer; font-size:13px; transition:all 0.15s;
+}
+.filter-btn:hover { background:rgba(255,255,255,0.08); }
+.filter-btn.active { background:rgba(100,160,255,0.15); border-color:rgba(100,160,255,0.5); color:#c8deff; }
+
+.slider-wrap { margin:10px 0 16px; }
+.slider-wrap label { font-size:12px; color:rgba(200,220,255,0.5); display:block; margin-bottom:6px; }
+.slider-row { display:flex; align-items:center; gap:10px; }
+.slider-row input[type=range] { flex:1; accent-color:#4da6ff; }
+.slider-val { font-size:12px; color:#88bbff; min-width:60px; text-align:right; }
+
+.badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+.badge-rudny  { background:rgba(220,60,60,0.25);  color:#ff8888; border:1px solid #cc4444; }
+.badge-uhelny { background:rgba(140,140,140,0.2); color:#bbbbbb; border:1px solid #888; }
+.badge-tunel  { background:rgba(220,180,0,0.2);   color:#ffdd44; border:1px solid #bbaa00; }
+.badge-prodano   { background:rgba(255,200,0,0.2);  color:#ffcc44; border:1px solid #ddaa00; }
+.badge-neprodano { background:rgba(80,100,130,0.2); color:#8899bb; border:1px solid #445566; }
+
+#db-toolbar {
+  padding:10px 16px; border-bottom:0.5px solid rgba(100,160,255,0.15);
+  display:flex; gap:8px; flex-wrap:wrap; flex-shrink:0; align-items:center;
+}
+.tb-btn {
+  padding:6px 14px; border-radius:7px; border:0.5px solid rgba(100,160,255,0.3);
+  background:rgba(100,160,255,0.08); color:#88bbff; cursor:pointer; font-size:12px;
+  white-space:nowrap; transition:all 0.15s;
+}
+.tb-btn:hover { background:rgba(100,160,255,0.18); }
+.tb-btn.danger { border-color:rgba(220,60,60,0.4); color:#ff8888; background:rgba(220,60,60,0.08); }
+.tb-btn.success { border-color:rgba(60,200,100,0.4); color:#66dd88; background:rgba(60,200,100,0.08); }
+
+#table-wrap { flex:1; overflow:auto; }
+table { border-collapse:collapse; width:max-content; min-width:100%; font-size:12px; }
+th {
+  background:rgba(20,40,80,0.9); color:rgba(200,220,255,0.6);
+  padding:8px 10px; text-align:left; white-space:nowrap;
+  border-bottom:0.5px solid rgba(100,160,255,0.2);
+  position:sticky; top:0; z-index:5; font-weight:500; font-size:11px;
+  text-transform:uppercase; letter-spacing:0.5px;
+}
+th .col-del { margin-left:6px; color:rgba(220,60,60,0.5); cursor:pointer; font-size:10px; }
+th .col-del:hover { color:#ff6666; }
+td { padding:0; border-bottom:0.5px solid rgba(100,160,255,0.08); max-width:200px; }
+tr:hover td { background:rgba(100,160,255,0.05); }
+td input {
+  width:100%; padding:7px 10px; background:transparent; border:none;
+  color:#c8deff; font-size:12px; font-family:sans-serif; outline:none;
+}
+td input:focus { background:rgba(100,160,255,0.1); }
+.td-del { width:32px; text-align:center; }
+.td-del button { background:none; border:none; color:rgba(220,60,60,0.4); cursor:pointer; font-size:14px; padding:4px; }
+.td-del button:hover { color:#ff6666; }
+
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.6);
+  z-index:500; display:none; align-items:center; justify-content:center;
+}
+.modal-overlay.open { display:flex; }
+.modal {
+  background:#0d1e38; border:0.5px solid rgba(100,160,255,0.3);
+  border-radius:12px; padding:24px; min-width:300px; max-width:440px; width:90%;
+}
+.modal h3 { color:#88bbff; margin-bottom:16px; font-size:15px; font-weight:500; }
+.modal label { display:block; font-size:12px; color:rgba(200,220,255,0.5); margin-bottom:4px; margin-top:12px; }
+.modal input {
+  width:100%; padding:8px 12px; background:rgba(255,255,255,0.05);
+  border:0.5px solid rgba(100,160,255,0.3); border-radius:7px;
+  color:#c8deff; font-size:13px; outline:none;
+}
+.modal-btns { display:flex; gap:8px; margin-top:20px; justify-content:flex-end; }
+.modal-btns button { padding:8px 20px; border-radius:7px; border:0.5px solid rgba(100,160,255,0.3); cursor:pointer; font-size:13px; }
+.btn-confirm { background:rgba(100,160,255,0.15); color:#88bbff; }
+.btn-cancel  { background:transparent; color:rgba(200,220,255,0.5); }
+
+#drop-zone {
+  border:1.5px dashed rgba(100,160,255,0.3); border-radius:10px;
+  padding:16px; text-align:center; color:rgba(200,220,255,0.5);
+  font-size:13px; cursor:pointer; transition:all 0.2s; margin:8px 16px;
+}
+#drop-zone:hover { border-color:rgba(100,160,255,0.7); background:rgba(100,160,255,0.08); }
+#file-input { display:none; }
+</style>
+</head>
+<body>
+<div id="globe-container"></div>
+<h1>Světová mapa dolů</h1>
+<div id="counter"></div>
+
+<div id="search-wrap">
+  <input type="text" id="search-input" placeholder="🔍 Hledat důl..." oninput="onSearch(this.value)" autocomplete="off">
+  <div id="search-results"></div>
+</div>
+
+<button class="ui-btn" id="btn-db"     onclick="togglePanel('panel-db')"     title="Databáze">🗄️</button>
+<button class="ui-btn" id="btn-legend" onclick="togglePanel('panel-legend')" title="Legenda">📍</button>
+<button class="ui-btn" id="btn-filter" onclick="togglePanel('panel-filter')" title="Filtry">⚙️</button>
+
+<div id="info-box">Klikni na bod pro detail &nbsp;|&nbsp; Najeď myší pro náhled</div>
+
+<div class="panel" id="panel-legend">
+  <div class="panel-header"><h2>Legenda</h2><button class="panel-close" onclick="closePanel('panel-legend')">✕</button></div>
+  <div class="panel-body">
+    <div class="leg-title">Typ objektu</div>
+    <div class="leg"><div class="leg-dot" style="background:#dd3333"></div>Rudný důl</div>
+    <div class="leg"><div class="leg-dot" style="background:#aaaaaa"></div>Uhelný důl</div>
+    <div class="leg"><div class="leg-dot" style="background:#ddbb00"></div>Tunel</div>
+    <hr class="leg-sep">
+    <div class="leg-title">Velikost bodu</div>
+    <div class="leg" style="font-size:12px;color:rgba(200,220,255,0.6)">Větší bod = vyšší obrat</div>
+    <hr class="leg-sep">
+    <div class="leg-title">Obchodní stav</div>
+    <div class="leg"><span style="color:#ffcc44">★</span>&nbsp;Prodáno</div>
+    <div class="leg"><span style="color:#8899bb">◯</span>&nbsp;Neprodáno</div>
+  </div>
+</div>
+
+<div class="panel" id="panel-filter">
+  <div class="panel-header"><h2>Filtry</h2><button class="panel-close" onclick="closePanel('panel-filter')">✕</button></div>
+  <div class="panel-body">
+    <div class="leg-title">Typ objektu</div>
+    <button class="filter-btn active" id="ft-vse"      onclick="setTypFilter('vse',this)">Vše</button>
+    <button class="filter-btn"        id="ft-rudny"    onclick="setTypFilter('rudny',this)">Rudné doly</button>
+    <button class="filter-btn"        id="ft-uhelny"   onclick="setTypFilter('uhelny',this)">Uhelné doly</button>
+    <button class="filter-btn"        id="ft-tunel"    onclick="setTypFilter('tunel',this)">Tunely</button>
+    <hr class="leg-sep">
+    <div class="leg-title">Obchodní stav</div>
+    <button class="filter-btn active" id="fp-vse"      onclick="setProdFilter('vse',this)">Vše</button>
+    <button class="filter-btn"        id="fp-prodano"  onclick="setProdFilter('prodano',this)">★ Již prodáno</button>
+    <button class="filter-btn"        id="fp-ne"       onclick="setProdFilter('neprodano',this)">◯ Zatím neprodáno</button>
+    <hr class="leg-sep">
+    <div class="leg-title">Filtr podle obratu (mil. Kč)</div>
+    <div class="slider-wrap">
+      <label>Minimum: <b id="min-val">0</b></label>
+      <div class="slider-row">
+        <input type="range" id="slider-min" min="0" max="900" value="0" step="10" oninput="onSlider()">
+        <span class="slider-val" id="min-val-r">0</span>
+      </div>
+    </div>
+    <div class="slider-wrap">
+      <label>Maximum: <b id="max-val">900</b></label>
+      <div class="slider-row">
+        <input type="range" id="slider-max" min="0" max="900" value="900" step="10" oninput="onSlider()">
+        <span class="slider-val" id="max-val-r">900</span>
+      </div>
+    </div>
+    <button class="filter-btn" onclick="resetFilters()" style="text-align:center;color:#88bbff;margin-top:4px">↺ Reset filtrů</button>
+  </div>
+</div>
+
+<div class="panel" id="panel-db">
+  <div class="panel-header"><h2>🗄️ Databáze dolů</h2><button class="panel-close" onclick="closePanel('panel-db')">✕</button></div>
+  <div id="db-toolbar">
+    <button class="tb-btn success" onclick="addRow()">+ Přidat řádek</button>
+    <button class="tb-btn" onclick="addColumn()">+ Přidat sloupec</button>
+    <button class="tb-btn" onclick="document.getElementById('file-input').click()">⬆ Import</button>
+    <button class="tb-btn" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="tb-btn danger" onclick="deleteSelected()">🗑 Smazat vybrané</button>
+    <input type="file" id="file-input" accept=".csv,.xlsx,.xls" onchange="importFile(this)">
+  </div>
+  <div id="drop-zone"
+    onclick="document.getElementById('file-input').click()"
+    ondragover="event.preventDefault();this.classList.add('drag-over')"
+    ondragleave="this.classList.remove('drag-over')"
+    ondrop="handleDrop(event)">
+    Přetáhni CSV nebo Excel, nebo klikni pro výběr
+  </div>
+  <div id="table-wrap">
+    <table><thead id="table-head"></thead><tbody id="table-body"></tbody></table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-col">
+  <div class="modal">
+    <h3>Přidat nový sloupec</h3>
+    <label>Název sloupce</label>
+    <input type="text" id="col-name" placeholder="např. Počet zaměstnanců">
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal('modal-col')">Zrušit</button>
+      <button class="btn-confirm" onclick="confirmAddColumn()">Přidat</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/globe.gl"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+const FIXED_COLS = ["name","city","country","typ","obrat","prodano","stroje","poznamky","lat","lng"];
+const COL_LABELS = {
+  name:"Název", city:"Město", country:"Země (ISO kód)",
+  typ:"Typ (rudny/uhelny/tunel)", obrat:"Obrat (mil. Kč)",
+  prodano:"Prodáno (ano/ne)", stroje:"Prodané stroje",
+  poznamky:"Poznámky", lat:"Lat", lng:"Lng"
+};
+const COLORS = { rudny:"#dd3333", uhelny:"#aaaaaa", tunel:"#ddbb00" };
+
+let columns = [...FIXED_COLS];
+let tableData = [];
+let globe;
+let typFilter  = "vse";
+let prodFilter = "vse";
+let minObrat   = 0;
+let maxObrat   = 900;
+
+const DEFAULT_DATA = [
+  {name:"Ostrava Coal Mine",city:"Ostrava",country:"CZE",typ:"uhelny",obrat:"45",prodano:"ano",stroje:"Kombajn MB470",poznamky:"Pravidelný odběratel",lat:"49.83",lng:"18.29"},
+  {name:"Příbram Silver Mine",city:"Příbram",country:"CZE",typ:"rudny",obrat:"28",prodano:"ano",stroje:"Vrtací souprava RD200",poznamky:"",lat:"49.69",lng:"14.00"},
+  {name:"Důl Darkov",city:"Karviná",country:"CZE",typ:"uhelny",obrat:"38",prodano:"ne",stroje:"",poznamky:"Potenciál",lat:"49.86",lng:"18.54"},
+  {name:"Kiruna Iron Mine",city:"Kiruna",country:"SWE",typ:"rudny",obrat:"210",prodano:"ne",stroje:"",poznamky:"Největší podzemní důl Evropy",lat:"67.86",lng:"20.23"},
+  {name:"Aitik Copper Mine",city:"Gällivare",country:"SWE",typ:"rudny",obrat:"185",prodano:"ano",stroje:"Nakladač WL-950",poznamky:"",lat:"67.07",lng:"20.95"},
+  {name:"Ruhr Coal",city:"Dortmund",country:"DEU",typ:"uhelny",obrat:"67",prodano:"ano",stroje:"Kombajn SL500",poznamky:"Rozšíření smlouvy",lat:"51.51",lng:"7.46"},
+  {name:"Polish Coal Katowice",city:"Katowice",country:"POL",typ:"uhelny",obrat:"52",prodano:"ano",stroje:"Dopravník DP300",poznamky:"",lat:"50.26",lng:"19.02"},
+  {name:"KGHM Copper Poland",city:"Lubin",country:"POL",typ:"rudny",obrat:"320",prodano:"ano",stroje:"Drtič PX-1000",poznamky:"Největší měděný důl EU",lat:"51.40",lng:"16.20"},
+  {name:"Rio Tinto Mine",city:"Huelva",country:"ESP",typ:"rudny",obrat:"145",prodano:"ano",stroje:"Flotace FL-800",poznamky:"Historický důl",lat:"37.74",lng:"-6.56"},
+  {name:"Neves-Corvo",city:"Castro Verde",country:"PRT",typ:"rudny",obrat:"89",prodano:"ne",stroje:"",poznamky:"Měď a zinek",lat:"37.70",lng:"-8.12"},
+  {name:"Bor Copper Mine",city:"Bor",country:"SRB",typ:"rudny",obrat:"95",prodano:"ne",stroje:"",poznamky:"",lat:"44.07",lng:"22.10"},
+  {name:"Chelopech Gold",city:"Chelopech",country:"BGR",typ:"rudny",obrat:"78",prodano:"ne",stroje:"",poznamky:"Zlato a měď",lat:"42.70",lng:"24.10"},
+  {name:"Gotthard Base Tunnel",city:"Erstfeld",country:"CHE",typ:"tunel",obrat:"95",prodano:"ano",stroje:"Razicí štít TBM-9",poznamky:"Nejdelší tunel světa",lat:"46.82",lng:"8.64"},
+  {name:"Brenner Base Tunnel",city:"Innsbruck",country:"AUT",typ:"tunel",obrat:"78",prodano:"ano",stroje:"Čerpadla HPS",poznamky:"Ve výstavbě",lat:"47.27",lng:"11.40"},
+  {name:"Crossrail London",city:"London",country:"GBR",typ:"tunel",obrat:"145",prodano:"ano",stroje:"Monitoring MS-7",poznamky:"",lat:"51.51",lng:"-0.09"},
+  {name:"Channel Tunnel",city:"Folkestone",country:"GBR",typ:"tunel",obrat:"220",prodano:"ne",stroje:"",poznamky:"Spojuje UK a FR",lat:"51.09",lng:"1.17"},
+  {name:"Svalbard Coal",city:"Longyearbyen",country:"NOR",typ:"uhelny",obrat:"18",prodano:"ne",stroje:"",poznamky:"Arktický důl",lat:"78.22",lng:"15.63"},
+  {name:"Grasberg Mine",city:"Timika",country:"IDN",typ:"rudny",obrat:"450",prodano:"ne",stroje:"",poznamky:"Největší zlatý důl světa",lat:"-4.05",lng:"137.12"},
+  {name:"Bayan Resources Coal",city:"Kalimantan",country:"IDN",typ:"uhelny",obrat:"210",prodano:"ne",stroje:"",poznamky:"",lat:"0.50",lng:"116.83"},
+  {name:"Erdenet Copper",city:"Erdenet",country:"MNG",typ:"rudny",obrat:"175",prodano:"ne",stroje:"",poznamky:"",lat:"49.03",lng:"104.07"},
+  {name:"Oyu Tolgoi",city:"Khanbogd",country:"MNG",typ:"rudny",obrat:"520",prodano:"ne",stroje:"",poznamky:"Měď a zlato",lat:"43.00",lng:"106.85"},
+  {name:"Datong Coal Mine",city:"Datong",country:"CHN",typ:"uhelny",obrat:"420",prodano:"ne",stroje:"",poznamky:"Největší uhelný důl Číny",lat:"40.09",lng:"113.30"},
+  {name:"Shenhua Coal",city:"Ordos",country:"CHN",typ:"uhelny",obrat:"650",prodano:"ne",stroje:"",poznamky:"",lat:"39.61",lng:"110.04"},
+  {name:"Norilsk Nickel",city:"Norilsk",country:"RUS",typ:"rudny",obrat:"720",prodano:"ne",stroje:"",poznamky:"Největší nikl světa",lat:"69.34",lng:"88.20"},
+  {name:"Muruntau Gold",city:"Zarafshan",country:"UZB",typ:"rudny",obrat:"340",prodano:"ne",stroje:"",poznamky:"Největší zlatý důl Asie",lat:"41.52",lng:"64.58"},
+  {name:"Jharia Coal",city:"Dhanbad",country:"IND",typ:"uhelny",obrat:"185",prodano:"ne",stroje:"",poznamky:"Hoří od roku 1916",lat:"23.78",lng:"86.42"},
+  {name:"Hamersley Iron",city:"Tom Price",country:"AUS",typ:"rudny",obrat:"380",prodano:"ano",stroje:"Flotace FL-800",poznamky:"Železná ruda",lat:"-22.69",lng:"117.79"},
+  {name:"Olympic Dam",city:"Roxby Downs",country:"AUS",typ:"rudny",obrat:"450",prodano:"ne",stroje:"",poznamky:"Uran, měď, zlato",lat:"-30.44",lng:"136.89"},
+  {name:"Hunter Valley Coal",city:"Newcastle",country:"AUS",typ:"uhelny",obrat:"310",prodano:"ne",stroje:"",poznamky:"",lat:"-32.92",lng:"151.78"},
+  {name:"Bowen Basin Coal",city:"Mackay",country:"AUS",typ:"uhelny",obrat:"280",prodano:"ne",stroje:"",poznamky:"Queensland",lat:"-21.14",lng:"149.19"},
+  {name:"Sydney Metro Tunnel",city:"Sydney",country:"AUS",typ:"tunel",obrat:"88",prodano:"ano",stroje:"Ventilace VT-300",poznamky:"",lat:"-33.87",lng:"151.21"},
+  {name:"Lihir Gold Mine",city:"Lihir Island",country:"PNG",typ:"rudny",obrat:"195",prodano:"ne",stroje:"",poznamky:"Papua Nová Guinea",lat:"-3.12",lng:"152.64"},
+  {name:"Bingham Canyon",city:"Salt Lake City",country:"USA",typ:"rudny",obrat:"580",prodano:"ano",stroje:"Nakladač WL-950",poznamky:"Největší povrchový důl USA",lat:"40.52",lng:"-112.15"},
+  {name:"Powder River Coal",city:"Gillette",country:"USA",typ:"uhelny",obrat:"320",prodano:"ne",stroje:"",poznamky:"Wyoming",lat:"44.29",lng:"-105.50"},
+  {name:"Morenci Copper",city:"Clifton",country:"USA",typ:"rudny",obrat:"420",prodano:"ne",stroje:"",poznamky:"Arizona",lat:"33.06",lng:"-109.36"},
+  {name:"Highland Valley Copper",city:"Logan Lake",country:"CAN",typ:"rudny",obrat:"245",prodano:"ne",stroje:"",poznamky:"",lat:"50.47",lng:"-121.03"},
+  {name:"Peñasquito",city:"Mazapil",country:"MEX",typ:"rudny",obrat:"285",prodano:"ne",stroje:"",poznamky:"Stříbro a zlato",lat:"24.13",lng:"-101.89"},
+  {name:"Escondida Copper",city:"Antofagasta",country:"CHL",typ:"rudny",obrat:"890",prodano:"ano",stroje:"Drtič PX-2000",poznamky:"Největší měděný důl světa",lat:"-24.27",lng:"-69.07"},
+  {name:"Collahuasi Copper",city:"Iquique",country:"CHL",typ:"rudny",obrat:"520",prodano:"ne",stroje:"",poznamky:"",lat:"-20.98",lng:"-68.62"},
+  {name:"Los Pelambres",city:"Salamanca",country:"CHL",typ:"rudny",obrat:"345",prodano:"ne",stroje:"",poznamky:"",lat:"-31.82",lng:"-70.57"},
+  {name:"Cerro Verde Copper",city:"Arequipa",country:"PER",typ:"rudny",obrat:"420",prodano:"ne",stroje:"",poznamky:"",lat:"-16.52",lng:"-71.55"},
+  {name:"Antamina Mine",city:"Huaraz",country:"PER",typ:"rudny",obrat:"380",prodano:"ne",stroje:"",poznamky:"Měď a zinek",lat:"-9.53",lng:"-77.05"},
+  {name:"Cerrejón Coal",city:"Riohacha",country:"COL",typ:"uhelny",obrat:"210",prodano:"ne",stroje:"",poznamky:"",lat:"11.05",lng:"-72.71"},
+  {name:"Carajás Iron Mine",city:"Parauapebas",country:"BRA",typ:"rudny",obrat:"780",prodano:"ne",stroje:"",poznamky:"Největší železný důl světa",lat:"-6.07",lng:"-50.16"},
+  {name:"Witwatersrand Gold",city:"Johannesburg",country:"ZAF",typ:"rudny",obrat:"420",prodano:"ano",stroje:"Těžební věž GT-X",poznamky:"Zlatý důl",lat:"-26.20",lng:"28.04"},
+  {name:"Jwaneng Diamond",city:"Jwaneng",country:"BWA",typ:"rudny",obrat:"380",prodano:"ne",stroje:"",poznamky:"Diamanty",lat:"-24.60",lng:"24.73"},
+  {name:"Tenke Fungurume",city:"Fungurume",country:"COD",typ:"rudny",obrat:"290",prodano:"ne",stroje:"",poznamky:"Kobalt",lat:"-10.54",lng:"26.40"},
+  {name:"Obuasi Gold",city:"Obuasi",country:"GHA",typ:"rudny",obrat:"185",prodano:"ne",stroje:"",poznamky:"Ghana",lat:"6.20",lng:"-1.67"},
+  {name:"Lumwana Copper",city:"Solwezi",country:"ZMB",typ:"rudny",obrat:"195",prodano:"ne",stroje:"",poznamky:"Zambia",lat:"-12.40",lng:"25.87"},
+  {name:"Tasiast Gold",city:"Nouadhibou",country:"MRT",typ:"rudny",obrat:"155",prodano:"ne",stroje:"",poznamky:"Mauritánie",lat:"19.87",lng:"-14.97"},
+];
+
+function saveData() {
+  try {
+    localStorage.setItem("dulni_data_v3", JSON.stringify(tableData));
+    localStorage.setItem("dulni_cols_v3", JSON.stringify(columns));
+  } catch(e) {}
+}
+function loadData() {
+  try {
+    const d = localStorage.getItem("dulni_data_v3");
+    const c = localStorage.getItem("dulni_cols_v3");
+    tableData = d ? JSON.parse(d) : DEFAULT_DATA.map(r => ({...r}));
+    columns   = c ? JSON.parse(c) : [...FIXED_COLS];
+  } catch(e) {
+    tableData = DEFAULT_DATA.map(r => ({...r}));
+    columns   = [...FIXED_COLS];
+  }
+}
+
+function getObrat(r) { return parseFloat(r.obrat) || 0; }
+function getMaxObrat() { return Math.max(...tableData.map(getObrat), 1); }
+
+function pointRadius(d) {
+  const max = getMaxObrat();
+  const o = getObrat(d);
+  const alt = globe ? globe.pointOfView().altitude : 2.2;
+  const base = 0.18 + (o / max) * 0.65;
+  const zoom = Math.max(0.25, Math.min(1.2, 2.2 / alt));
+  return base * zoom;
+}
+
+function getFilteredData() {
+  return tableData
+    .filter(r => r.lat && r.lng && !isNaN(parseFloat(r.lat)) && !isNaN(parseFloat(r.lng)))
+    .filter(r => typFilter === "vse" || r.typ === typFilter)
+    .filter(r => prodFilter === "vse" || (prodFilter === "prodano" ? r.prodano === "ano" : r.prodano !== "ano"))
+    .filter(r => { const o = getObrat(r); return o >= minObrat && o <= maxObrat; })
+    .map(r => ({ ...r, lat:parseFloat(r.lat), lng:parseFloat(r.lng), color:COLORS[r.typ]||"#888888" }));
+}
+
+function refreshGlobe() {
+  const data = getFilteredData();
+  globe.pointsData(data).pointRadius(d => pointRadius(d));
+  updateCounter(data.length);
+}
+
+function updateCounter(shown) {
+  const total = tableData.filter(r => r.lat && r.lng).length;
+  document.getElementById("counter").textContent = "Zobrazeno: " + shown + " / " + total;
+}
+
+function buildGlobe() {
+  const data = getFilteredData();
+  globe = Globe()
+    .globeImageUrl("https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg")
+    .backgroundImageUrl("https://unpkg.com/three-globe/example/img/night-sky.png")
+    .pointsData(data)
+    .pointLat("lat").pointLng("lng").pointColor("color")
+    .pointRadius(d => pointRadius(d))
+    .pointAltitude(0.015).pointResolution(16)
+    .pointLabel(d => {
+      const extra = columns
+        .filter(c => !["name","city","country","lat","lng","color","typ","prodano"].includes(c) && d[c])
+        .map(c => "<div style='font-size:11px;color:rgba(200,220,255,0.65)'>" + (COL_LABELS[c]||c) + ": " + d[c] + "</div>")
+        .join("");
+      return "<div style='background:rgba(6,13,26,0.95);border:1.5px solid " + d.color + ";border-radius:8px;padding:10px 14px;font-family:sans-serif;color:#c8deff;min-width:200px;max-width:280px;line-height:1.7'>" +
+        "<div style='font-size:14px;font-weight:600;color:" + d.color + "'>" + d.name + "</div>" +
+        "<div style='font-size:11px;color:rgba(200,220,255,0.5);margin-bottom:5px'>" + d.city + ", " + d.country + "</div>" +
+        extra +
+        "<div style='margin-top:5px;font-size:12px'>" +
+        (d.prodano === "ano" ? "<span style='color:#ffcc44'>★ Zákazník – prodáno</span>" : "<span style='color:#8899bb'>◯ Potenciál</span>") +
+        "</div></div>";
+    })
+    .onPointClick(d => {
+      const extraInfo = columns
+        .filter(c => !["name","city","country","lat","lng","color"].includes(c) && d[c])
+        .map(c => "<div class='info-cell'><span class='info-label'>" + (COL_LABELS[c]||c) + "</span><span class='info-value'>" + (c==="obrat" ? d[c]+" mil. Kč" : d[c]) + "</span></div>")
+        .join("");
+      const prodBadge = d.prodano === "ano"
+        ? "<span class='badge badge-prodano'>★ Prodáno</span>"
+        : "<span class='badge badge-neprodano'>◯ Neprodáno</span>";
+      document.getElementById("info-box").innerHTML =
+        "<div style='display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:8px;flex-wrap:wrap'>" +
+        "<strong style='color:" + d.color + ";font-size:16px'>" + d.name + "</strong>" +
+        "<span style='color:rgba(200,220,255,0.4)'>" + d.city + ", " + d.country + "</span>" +
+        "<span class='badge badge-" + d.typ + "'>" + d.typ + "</span>" +
+        prodBadge + "</div>" +
+        "<div class='info-grid'>" + extraInfo + "</div>";
+    })
+    (document.getElementById("globe-container"));
+
+  globe.renderer().setPixelRatio(window.devicePixelRatio * 1.5);
+  globe.renderer().setSize(window.innerWidth, window.innerHeight);
+  globe.pointOfView({ lat:20, lng:15, altitude:2.2 }, 1000);
+  updateCounter(data.length);
+
+  globe.controls().addEventListener("change", () => {
+    globe.pointRadius(d => pointRadius(d));
+  });
+
+  const s = document.createElement("script");
+  s.src = "https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js";
+  s.onload = () => {
+    fetch("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")
+      .then(r => r.json()).then(world => {
+        globe
+          .polygonsData(topojson.feature(world, world.objects.countries).features)
+          .polygonAltitude(0.004)
+          .polygonCapColor(() => "rgba(30,60,100,0.2)")
+          .polygonSideColor(() => "rgba(20,40,80,0.1)")
+          .polygonStrokeColor(() => "rgba(100,160,255,0.35)");
+      });
+  };
+  document.head.appendChild(s);
+
+  window.addEventListener("resize", () => {
+    globe.renderer().setSize(window.innerWidth, window.innerHeight);
+    globe.camera().aspect = window.innerWidth / window.innerHeight;
+    globe.camera().updateProjectionMatrix();
+  });
+}
+
+function setTypFilter(typ, btn) {
+  typFilter = typ;
+  ["ft-vse","ft-rudny","ft-uhelny","ft-tunel"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("active");
+  });
+  btn.classList.add("active");
+  refreshGlobe();
+}
+function setProdFilter(typ, btn) {
+  prodFilter = typ;
+  ["fp-vse","fp-prodano","fp-ne"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("active");
+  });
+  btn.classList.add("active");
+  refreshGlobe();
+}
+function onSlider() {
+  minObrat = parseInt(document.getElementById("slider-min").value);
+  maxObrat = parseInt(document.getElementById("slider-max").value);
+  if (minObrat > maxObrat) { maxObrat = minObrat; document.getElementById("slider-max").value = maxObrat; }
+  document.getElementById("min-val").textContent = minObrat;
+  document.getElementById("max-val").textContent = maxObrat;
+  document.getElementById("min-val-r").textContent = minObrat;
+  document.getElementById("max-val-r").textContent = maxObrat;
+  refreshGlobe();
+}
+function resetFilters() {
+  typFilter = "vse"; prodFilter = "vse"; minObrat = 0; maxObrat = 900;
+  document.getElementById("slider-min").value = 0;
+  document.getElementById("slider-max").value = 900;
+  ["min-val","min-val-r"].forEach(id => document.getElementById(id).textContent = "0");
+  ["max-val","max-val-r"].forEach(id => document.getElementById(id).textContent = "900");
+  ["ft-vse","fp-vse"].forEach(id => document.getElementById(id) && document.getElementById(id).classList.add("active"));
+  ["ft-rudny","ft-uhelny","ft-tunel","fp-prodano","fp-ne"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove("active");
+  });
+  refreshGlobe();
+}
+
+function onSearch(val) {
+  const box = document.getElementById("search-results");
+  if (!val || val.length < 2) { box.style.display = "none"; return; }
+  const q = val.toLowerCase();
+  const hits = tableData
+    .filter(r => (r.name||"").toLowerCase().includes(q) || (r.city||"").toLowerCase().includes(q))
+    .slice(0, 8);
+  if (!hits.length) { box.style.display = "none"; return; }
+  box.innerHTML = hits.map(r =>
+    "<div class='search-item' onclick=\"flyTo(" + r.lat + "," + r.lng + ",'" + (r.name||"").replace(/'/g,"\\'") + "')\">" +
+    "<div class='search-item-name'>" + r.name + "</div>" +
+    "<div class='search-item-sub'>" + r.city + ", " + r.country + " · " + r.typ + " · " + r.obrat + " mil. Kč</div>" +
+    "</div>"
+  ).join("");
+  box.style.display = "block";
+}
+function flyTo(lat, lng, name) {
+  globe.pointOfView({ lat:parseFloat(lat), lng:parseFloat(lng), altitude:0.5 }, 1200);
+  document.getElementById("search-results").style.display = "none";
+  document.getElementById("search-input").value = name;
+}
+document.addEventListener("click", e => {
+  if (!e.target.closest("#search-wrap"))
+    document.getElementById("search-results").style.display = "none";
+});
+
+function renderTable() {
+  const head = document.getElementById("table-head");
+  const body = document.getElementById("table-body");
+  head.innerHTML = "<tr><th><input type='checkbox' onchange='toggleAll(this)'></th>" +
+    columns.map(c =>
+      "<th>" + (COL_LABELS[c]||c) +
+      (!FIXED_COLS.includes(c) ? "<span class='col-del' onclick='deleteColumn(\"" + c + "\")'> ✕</span>" : "") +
+      "</th>"
+    ).join("") + "<th></th></tr>";
+  body.innerHTML = tableData.map((row, i) =>
+    "<tr><td style='padding:4px 8px;text-align:center'><input type='checkbox' class='row-check' data-i='" + i + "'></td>" +
+    columns.map(c =>
+      "<td><input value=\"" + (row[c]||"").replace(/"/g,"&quot;") + "\" onchange=\"updateCell(" + i + ",'" + c + "',this.value)\" placeholder=\"" + (COL_LABELS[c]||c) + "\"></td>"
+    ).join("") +
+    "<td class='td-del'><button onclick='deleteRow(" + i + ")'>🗑</button></td></tr>"
+  ).join("");
+  document.getElementById("drop-zone").style.display = tableData.length ? "none" : "block";
+}
+
+function updateCell(i, col, val) { tableData[i][col] = val; saveData(); refreshGlobe(); }
+function addRow() {
+  const row = {}; columns.forEach(c => row[c] = ""); tableData.push(row);
+  saveData(); renderTable();
+  setTimeout(() => { document.getElementById("table-wrap").scrollTop = 99999; }, 50);
+}
+function deleteRow(i) {
+  if (!confirm("Smazat řádek?")) return;
+  tableData.splice(i,1); saveData(); renderTable(); refreshGlobe();
+}
+function deleteSelected() {
+  const checked = [...document.querySelectorAll(".row-check:checked")].map(el => parseInt(el.dataset.i));
+  if (!checked.length) { alert("Označ řádky."); return; }
+  if (!confirm("Smazat " + checked.length + " řádků?")) return;
+  tableData = tableData.filter((_,i) => !checked.includes(i));
+  saveData(); renderTable(); refreshGlobe();
+}
+function toggleAll(cb) { document.querySelectorAll(".row-check").forEach(el => el.checked = cb.checked); }
+function addColumn() { document.getElementById("col-name").value = ""; openModal("modal-col"); }
+function confirmAddColumn() {
+  const name = document.getElementById("col-name").value.trim();
+  if (!name) { alert("Zadej název."); return; }
+  const key = name.toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_]/g,"");
+  if (columns.includes(key)) { alert("Sloupec již existuje."); return; }
+  COL_LABELS[key] = name; columns.push(key);
+  tableData.forEach(r => r[key] = "");
+  saveData(); renderTable(); closeModal("modal-col");
+}
+function deleteColumn(key) {
+  if (!confirm("Smazat sloupec?")) return;
+  columns = columns.filter(c => c !== key);
+  tableData.forEach(r => delete r[key]);
+  saveData(); renderTable();
+}
+
+function importFile(input) { if (input.files[0]) processFile(input.files[0]); input.value = ""; }
+function handleDrop(e) {
+  e.preventDefault(); document.getElementById("drop-zone").classList.remove("drag-over");
+  if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]);
+}
+function processFile(file) {
+  const n = file.name.toLowerCase();
+  if (n.endsWith(".csv")) { const r = new FileReader(); r.onload = e => importCSV(e.target.result); r.readAsText(file,"UTF-8"); }
+  else if (n.endsWith(".xlsx")||n.endsWith(".xls")) { const r = new FileReader(); r.onload = e => importExcel(e.target.result); r.readAsArrayBuffer(file); }
+  else alert("Podporované: .csv, .xlsx, .xls");
+}
+function importCSV(text) {
+  const lines = text.trim().split("\n").filter(l => l.trim());
+  const sep = lines[0].includes(";") ? ";" : ",";
+  const headers = lines[0].split(sep).map(h => h.trim().replace(/^"|"$/g,""));
+  const rows = lines.slice(1).map(line => {
+    const vals = line.split(sep); const obj = {};
+    headers.forEach((h,i) => obj[h] = (vals[i]||"").trim().replace(/^"|"$/g,""));
+    return obj;
+  });
+  applyImport(headers, rows);
+}
+function importExcel(buffer) {
+  const wb = XLSX.read(buffer,{type:"array"});
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+  if (!rows.length) { alert("Prázdný soubor."); return; }
+  applyImport(Object.keys(rows[0]), rows);
+}
+function applyImport(headers, rows) {
+  headers.forEach(h => { if (!columns.includes(h)) { columns.push(h); if (!COL_LABELS[h]) COL_LABELS[h] = h; } });
+  tableData = rows.map(r => { const obj = {}; columns.forEach(c => obj[c] = r[c]!==undefined ? String(r[c]) : ""); return obj; });
+  saveData(); renderTable(); refreshGlobe();
+  alert("Importováno " + rows.length + " řádků.");
+}
+function exportCSV() {
+  const lines = [columns.join(";")];
+  tableData.forEach(row => lines.push(columns.map(c => (row[c]||"").replace(/;/g,",")).join(";")));
+  const blob = new Blob(["\uFEFF"+lines.join("\n")],{type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "doly_export.csv"; a.click();
+}
+
+function togglePanel(id) {
+  const el = document.getElementById(id); const wasOpen = el.classList.contains("open");
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("open"));
+  if (!wasOpen) el.classList.add("open");
+}
+function closePanel(id) { document.getElementById(id).classList.remove("open"); }
+function openModal(id)  { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+document.addEventListener("keydown", e => {
+  if (e.key==="Escape") {
+    document.querySelectorAll(".modal-overlay.open").forEach(m => m.classList.remove("open"));
+    document.querySelectorAll(".panel.open").forEach(p => p.classList.remove("open"));
+  }
+});
+
+loadData();
+buildGlobe();
+renderTable();
+</script>
+</body>
+</html>
